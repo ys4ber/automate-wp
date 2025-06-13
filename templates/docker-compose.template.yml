@@ -1,0 +1,93 @@
+services:
+  database:
+    image: mariadb:10.6.4-focal
+    restart: unless-stopped
+    container_name: "{{APP_NAME}}_database"
+    ports:
+      - "{{DB_PORT}}:3306"
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: '${MYSQL_ROOT_PASSWORD}'
+      MYSQL_DATABASE: '${MYSQL_DATABASE}'
+      MYSQL_USER: '${MYSQL_USER}'
+      MYSQL_PASSWORD: '${MYSQL_PASSWORD}'
+    volumes:
+      - {{APP_NAME}}_db_data:/var/lib/mysql
+    networks:
+      - {{APP_NAME}}_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    restart: unless-stopped
+    container_name: "{{APP_NAME}}_phpmyadmin"
+    depends_on:
+      - database
+    ports:
+      - "{{PHPMYADMIN_PORT}}:80"
+    env_file: .env
+    environment:
+      PMA_HOST: database
+      MYSQL_ROOT_PASSWORD: '${MYSQL_ROOT_PASSWORD}'
+    networks:
+      - {{APP_NAME}}_network
+
+  wordpress:
+    image: wordpress:fpm
+    restart: unless-stopped
+    container_name: "{{APP_NAME}}_wordpress"
+    depends_on:
+      - database
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: '${MYSQL_DATABASE}'
+      WORDPRESS_DB_USER: '${MYSQL_USER}'
+      WORDPRESS_DB_PASSWORD: '${MYSQL_PASSWORD}'
+    volumes:
+      - {{APP_NAME}}_wp_data:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+      - ./php-conf/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+    networks:
+      - {{APP_NAME}}_network
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    container_name: "{{APP_NAME}}_nginx"
+    depends_on:
+      - wordpress
+    ports:
+      - "{{NGINX_PORT}}:80"
+    volumes:
+      - {{APP_NAME}}_wp_data:/var/www/html:ro
+      - ./wp-content:/var/www/html/wp-content:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - {{APP_NAME}}_network
+
+  wpcli:
+    image: wordpress:cli
+    container_name: "{{APP_NAME}}_wpcli"
+    depends_on:
+      - wordpress
+      - database
+    entrypoint: wp
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: '${MYSQL_DATABASE}'
+      WORDPRESS_DB_USER: '${MYSQL_USER}'
+      WORDPRESS_DB_PASSWORD: '${MYSQL_PASSWORD}'
+    networks:
+      - {{APP_NAME}}_network
+    volumes:
+      - {{APP_NAME}}_wp_data:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+
+volumes:
+  {{APP_NAME}}_db_data:
+  {{APP_NAME}}_wp_data:
+
+networks:
+  {{APP_NAME}}_network:
+    driver: bridge
