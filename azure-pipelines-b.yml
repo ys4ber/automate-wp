@@ -1,0 +1,63 @@
+# Generated on: Fri Jun 13 01:11:27 PM EDT 2025
+# App: b
+# Deploy User: deployuser
+# Azure Pipeline Template for b
+name: b-Deploy-SSH-ServiceConnection
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+  paths:
+    include:
+      - apps/b/*
+
+pr:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+
+variables:
+  - group: Secret-Variables-b
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "🐍 Use Python 3"
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y ansible
+    displayName: "📦 Install Ansible"
+
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: 'SSH-b'
+      sourceFolder: '$(Build.SourcesDirectory)/apps/b'
+      targetFolder: '/home/deployuser/b'
+    displayName: "🚚 Sync b Files to VM"
+
+  - task: SSH@0
+    displayName: "🔄 Deploy b"
+    inputs:
+      sshEndpoint: 'SSH-b'
+      runOptions: 'commands'
+      commands: |
+        cd /home/deployuser/b
+        echo "🔧 Starting b deployment..."
+        docker compose down --remove-orphans || true
+        docker compose up -d
+        echo "✅ b deployment complete!"
+
+  - script: |
+      echo "🌐 Testing b:"
+      curl -I http://192.99.35.79:4011/wp-login.php
+    displayName: "🧪 Validate b deployment"

@@ -1,12 +1,12 @@
-# WordPress Multi-App Manager Makefile
+# WordPress Multi-App Manager Makefile with Pipeline Generation
 
-.PHONY: help list-apps create-app start-app stop-app deploy-app backup-app
+.PHONY: help list-apps create-app create-pipeline create-all-pipelines
 
 help: ## Show this help
-	@echo "WordPress Multi-Application Manager"
-	@echo "=================================="
+	@echo "WordPress Multi-Application Manager with Pipeline Generation"
+	@echo "==========================================================="
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 list-apps: ## List all WordPress applications
 	@echo "📱 Available WordPress Applications:"
@@ -14,20 +14,70 @@ list-apps: ## List all WordPress applications
 		for app in apps/*/; do \
 			if [ -d "$$app" ]; then \
 				app_name=$$(basename "$$app"); \
-				echo "  🔹 $$app_name"; \
+				pipeline_file="pipelines/$${app_name}-pipeline.yml"; \
+				if [ -f "$$pipeline_file" ]; then \
+					echo "  🔹 $$app_name (✅ Pipeline ready)"; \
+				else \
+					echo "  🔹 $$app_name (❌ No pipeline)"; \
+				fi; \
 			fi; \
 		done; \
 	else \
 		echo "  No applications found. Use 'make create-app' to create one."; \
 	fi
 
-create-app: ## Create new WordPress app (usage: make create-app NAME=myapp PORT=4000)
+create-app: ## Create new WordPress app with pipeline (usage: make create-app NAME=myapp PORT=4000 USER=deployuser)
 	@if [ -z "$(NAME)" ] || [ -z "$(PORT)" ]; then \
-		echo "❌ Usage: make create-app NAME=myapp PORT=4000"; \
-		echo "   Example: make create-app NAME=ecommerce PORT=4000"; \
+		echo "❌ Usage: make create-app NAME=myapp PORT=4000 [USER=deployuser]"; \
+		echo "   Example: make create-app NAME=ecommerce PORT=4000 USER=deployuser"; \
 		exit 1; \
 	fi
-	./scripts/create-app.sh $(NAME) $(PORT)
+	./scripts/create-app.sh $(NAME) $(PORT) $(USER)
+
+create-pipeline: ## Create pipeline for existing app (usage: make create-pipeline NAME=myapp USER=deployuser)
+	@if [ -z "$(NAME)" ]; then \
+		echo "❌ Usage: make create-pipeline NAME=myapp [USER=deployuser]"; \
+		echo "   Example: make create-pipeline NAME=ecommerce USER=deployuser"; \
+		exit 1; \
+	fi
+	./scripts/create-pipeline.sh $(NAME) $(USER)
+
+create-all-pipelines: ## Create pipelines for all existing apps
+	@echo "🚀 Creating pipelines for all applications..."
+	@if [ -d "apps" ]; then \
+		for app in apps/*/; do \
+			if [ -d "$$app" ]; then \
+				app_name=$$(basename "$$app"); \
+				pipeline_file="pipelines/$${app_name}-pipeline.yml"; \
+				if [ ! -f "$$pipeline_file" ]; then \
+					echo "  Creating pipeline for $$app_name..."; \
+					./scripts/create-pipeline.sh $$app_name $(USER); \
+				else \
+					echo "  Pipeline already exists for $$app_name"; \
+				fi; \
+			fi; \
+		done; \
+	else \
+		echo "  No applications found."; \
+	fi
+
+list-pipelines: ## List all generated pipelines
+	@echo "🚀 Generated Azure DevOps Pipelines:"
+	@if [ -d "pipelines" ]; then \
+		for pipeline in pipelines/*-pipeline.yml; do \
+			if [ -f "$$pipeline" ]; then \
+				pipeline_name=$$(basename "$$pipeline" -pipeline.yml); \
+				app_name=$$(echo "$$pipeline_name" | sed 's/-pipeline//'); \
+				if [ -d "apps/$$app_name" ]; then \
+					echo "  🔹 $$pipeline_name (✅ App exists)"; \
+				else \
+					echo "  🔹 $$pipeline_name (❌ App missing)"; \
+				fi; \
+			fi; \
+		done; \
+	else \
+		echo "  No pipelines found. Use 'make create-pipeline' to create one."; \
+	fi
 
 start-app: ## Start specific app (usage: make start-app NAME=myapp)
 	@if [ -z "$(NAME)" ]; then \
@@ -51,7 +101,7 @@ start-all: ## Start all WordPress applications
 				app_name=$$(basename "$$app"); \
 				echo "  Starting $$app_name..."; \
 				cd "$$app" && docker compose up -d && cd ../..; \
-				sleep 20; \
+				sleep 5; \
 			fi; \
 		done; \
 	else \
@@ -89,69 +139,80 @@ deploy-app: ## Deploy specific app (usage: make deploy-app NAME=myapp)
 	fi
 	./scripts/manage-app.sh deploy $(NAME)
 
-# Quick setup commands
-quick-ecommerce: ## Quick setup for e-commerce site
-	make create-app NAME=ecommerce PORT=4000
-	@echo "✅ E-commerce site created! Run 'cd apps/ecommerce && make start && make setup'"
+# Quick setup commands with pipelines
+quick-ecommerce: ## Quick setup for e-commerce site with pipeline
+	make create-app NAME=ecommerce PORT=4000 USER=deployuser
+	@echo "✅ E-commerce site with pipeline created!"
 
-quick-blog: ## Quick setup for blog site
-	make create-app NAME=blog PORT=4010
-	@echo "✅ Blog site created! Run 'cd apps/blog && make start && make setup'"
+quick-blog: ## Quick setup for blog site with pipeline
+	make create-app NAME=blog PORT=4010 USER=deployuser
+	@echo "✅ Blog site with pipeline created!"
 
-quick-corporate: ## Quick setup for corporate site
-	make create-app NAME=corporate PORT=4020
-	@echo "✅ Corporate site created! Run 'cd apps/corporate && make start && make setup'"
+quick-corporate: ## Quick setup for corporate site with pipeline
+	make create-app NAME=corporate PORT=4020 USER=deployuser
+	@echo "✅ Corporate site with pipeline created!"
+
+# Pipeline management
+regenerate-pipeline: ## Regenerate pipeline for existing app (usage: make regenerate-pipeline NAME=myapp)
+	@if [ -z "$(NAME)" ]; then \
+		echo "❌ Usage: make regenerate-pipeline NAME=myapp [USER=deployuser]"; \
+		exit 1; \
+	fi
+	@if [ -f "pipelines/$(NAME)-pipeline.yml" ]; then \
+		echo "🔄 Regenerating pipeline for $(NAME)..."; \
+		rm -f "pipelines/$(NAME)-pipeline.yml"; \
+		./scripts/create-pipeline.sh $(NAME) $(USER); \
+	else \
+		echo "❌ Pipeline for $(NAME) not found. Creating new one..."; \
+		./scripts/create-pipeline.sh $(NAME) $(USER); \
+	fi
+
+validate-pipelines: ## Validate all pipeline files exist for apps
+	@echo "🔍 Validating pipeline configuration..."
+	@missing_pipelines=0; \
+	if [ -d "apps" ]; then \
+		for app in apps/*/; do \
+			if [ -d "$$app" ]; then \
+				app_name=$$(basename "$$app"); \
+				pipeline_file="pipelines/$${app_name}-pipeline.yml"; \
+				if [ ! -f "$$pipeline_file" ]; then \
+					echo "  ❌ Missing pipeline: $$app_name"; \
+					missing_pipelines=$$((missing_pipelines + 1)); \
+				else \
+					echo "  ✅ Pipeline exists: $$app_name"; \
+				fi; \
+			fi; \
+		done; \
+		if [ $$missing_pipelines -gt 0 ]; then \
+			echo ""; \
+			echo "🔧 Fix missing pipelines with: make create-all-pipelines"; \
+		else \
+			echo ""; \
+			echo "✅ All applications have pipelines!"; \
+		fi; \
+	fi
 
 # System maintenance
-system-cleanup: ## Clean up unused Docker resources
-	@echo "🧹 Cleaning up Docker system..."
-	docker system prune -f
-	docker volume prune -f
-	docker network prune -f
-	@echo "✅ System cleanup completed"
+clean-pipelines: ## Remove all generated pipeline files
+	@echo "🧹 Cleaning up pipeline files..."
+	@if [ -d "pipelines" ]; then \
+		rm -f pipelines/*-pipeline.yml; \
+		rm -f pipelines/*-ssh-setup.md; \
+		echo "✅ Pipeline files cleaned up"; \
+	else \
+		echo "  No pipeline files to clean"; \
+	fi
 
-info: ## Show system information
+info: ## Show system information including pipelines
 	@echo "ℹ️ WordPress Multi-App Manager Information"
 	@echo "========================================"
 	@echo ""
 	@echo "📱 Applications:"
 	@make list-apps
 	@echo ""
+	@echo "🚀 Pipelines:"
+	@make list-pipelines
+	@echo ""
 	@echo "🐳 Docker Status:"
 	@docker --version
 	@docker compose version
-
-
-clean:
-	@echo "🧹 Cleaning up all applications..."
-	@if [ -d "apps" ]; then \
-		for app in apps/*/; do \
-			if [ -d "$$app" ]; then \
-				app_name=$$(basename "$$app"); \
-				echo "  Removing $$app_name..."; \
-				sudo rm -rf "$$app"; \
-			fi; \
-		done; \
-	else \
-		echo "  No applications found."; \
-	fi
-	@echo "✅ All applications cleaned up"
-
-# Git operations
-push:
-	@git add . && \
-	if [ $$? -eq 0 ]; then \
-		git commit -m "auto commit $$(date)" && \
-		if [ $$? -eq 0 ]; then \
-			git push && \
-			if [ $$? -eq 0 ]; then \
-				echo "\033[0;32mcommit and push success\033[0m"; \
-			else \
-				echo "\033[0;31mpush failed\033[0m"; \
-			fi \
-		else \
-			echo "\033[0;31mcommit failed\033[0m"; \
-		fi \
-	else \
-		echo "\033[0;31madd failed\033[0m"; \
-	fi

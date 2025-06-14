@@ -1,8 +1,9 @@
 #!/bin/bash
-# Create new WordPress application
+# Create new WordPress application with automatic pipeline generation
 
 APP_NAME="$1"
 PORT_START="$2"
+DEPLOY_USER="${3:-deployuser}"  # Optional deploy user parameter
 
 # Colors
 RED='\033[0;31m'
@@ -16,8 +17,8 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 if [ -z "$APP_NAME" ] || [ -z "$PORT_START" ]; then
-    print_error "Usage: $0 <app-name> <starting-port>"
-    echo "Example: $0 ecommerce-site 4000"
+    print_error "Usage: $0 <app-name> <starting-port> [deploy-user]"
+    echo "Example: $0 ecommerce-site 4000 deployuser"
     exit 1
 fi
 
@@ -162,18 +163,37 @@ make logs           # View logs
 make setup          # Initial WordPress setup
 make status         # Show container status
 \`\`\`
+
+## 🚀 Deployment
+
+Pipeline file: \`pipelines/${APP_NAME}-pipeline.yml\`
+Deploy path: \`/home/${DEPLOY_USER}/${APP_NAME}\`
+SSH endpoint: \`SSH-${APP_NAME}\`
 EOF
 
 print_success "✅ WordPress app '$APP_NAME' created successfully!"
+
+# Generate pipeline automatically
+print_status "🔄 Generating Azure DevOps pipeline..."
+if [ -f "$SCRIPT_DIR/create-pipeline.sh" ]; then
+    "$SCRIPT_DIR/create-pipeline.sh" "$APP_NAME" "$DEPLOY_USER"
+else
+    print_error "Pipeline generation script not found: $SCRIPT_DIR/create-pipeline.sh"
+    print_status "You can create the pipeline manually later using:"
+    echo "  ./scripts/create-pipeline.sh $APP_NAME $DEPLOY_USER"
+fi
+
 echo ""
 echo "📋 App Details:"
 echo "  📁 Location: $APP_DIR"
 echo "  🌐 WordPress: http://192.99.35.79:$PORT_START"
 echo "  🗄️  phpMyAdmin: http://192.99.35.79:$((PORT_START + 1))"
 echo "  🔑 Admin Password: $WP_PASSWORD"
+echo "  🚀 Pipeline: pipelines/${APP_NAME}-pipeline.yml"
 echo ""
 echo "🚀 Next Steps:"
 echo "  1. cd apps/$APP_NAME"
 echo "  2. make start"
 echo "  3. make setup"
+echo "  4. Add pipeline to Azure DevOps"
 echo ""

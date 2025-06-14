@@ -1,0 +1,93 @@
+services:
+  database:
+    image: mariadb:10.6.4-focal
+    restart: unless-stopped
+    container_name: "mystore_database"
+    ports:
+      - "4020:3306"
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: '${MYSQL_ROOT_PASSWORD}'
+      MYSQL_DATABASE: '${MYSQL_DATABASE}'
+      MYSQL_USER: '${MYSQL_USER}'
+      MYSQL_PASSWORD: '${MYSQL_PASSWORD}'
+    volumes:
+      - mystore_db_data:/var/lib/mysql
+    networks:
+      - mystore_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    restart: unless-stopped
+    container_name: "mystore_phpmyadmin"
+    depends_on:
+      - database
+    ports:
+      - "4001:80"
+    env_file: .env
+    environment:
+      PMA_HOST: database
+      MYSQL_ROOT_PASSWORD: '${MYSQL_ROOT_PASSWORD}'
+    networks:
+      - mystore_network
+
+  wordpress:
+    image: wordpress:fpm
+    restart: unless-stopped
+    container_name: "mystore_wordpress"
+    depends_on:
+      - database
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: '${MYSQL_DATABASE}'
+      WORDPRESS_DB_USER: '${MYSQL_USER}'
+      WORDPRESS_DB_PASSWORD: '${MYSQL_PASSWORD}'
+    volumes:
+      - mystore_wp_data:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+      - ./php-conf/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+    networks:
+      - mystore_network
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    container_name: "mystore_nginx"
+    depends_on:
+      - wordpress
+    ports:
+      - "4000:80"
+    volumes:
+      - mystore_wp_data:/var/www/html:ro
+      - ./wp-content:/var/www/html/wp-content:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - mystore_network
+
+  wpcli:
+    image: wordpress:cli
+    container_name: "mystore_wpcli"
+    depends_on:
+      - wordpress
+      - database
+    entrypoint: wp
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: '${MYSQL_DATABASE}'
+      WORDPRESS_DB_USER: '${MYSQL_USER}'
+      WORDPRESS_DB_PASSWORD: '${MYSQL_PASSWORD}'
+    networks:
+      - mystore_network
+    volumes:
+      - mystore_wp_data:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+
+volumes:
+  mystore_db_data:
+  mystore_wp_data:
+
+networks:
+  mystore_network:
+    driver: bridge

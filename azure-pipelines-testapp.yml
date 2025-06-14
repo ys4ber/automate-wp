@@ -1,0 +1,61 @@
+# Generated on: Fri Jun 13 01:12:28 PM EDT 2025
+# App: testapp
+# Deploy User: deployuser
+# Azure Pipeline Template for testapp
+name: testapp-Deploy-SSH-ServiceConnection
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+  paths:
+    include:
+      - apps/testapp/*
+
+pr:
+  branches:
+    include:
+      - master
+
+variables:
+  - group: Secret-Variables-testapp
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "🐍 Use Python 3"
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y ansible
+    displayName: "📦 Install Ansible"
+
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: 'SSH-testapp'
+      sourceFolder: '$(Build.SourcesDirectory)/apps/testapp'
+      targetFolder: '/home/deployuser/testapp'
+    displayName: "🚚 Sync testapp Files to VM"
+
+  - task: SSH@0
+    displayName: "🔄 Deploy testapp"
+    inputs:
+      sshEndpoint: 'SSH-testapp'
+      runOptions: 'commands'
+      commands: |
+        cd /home/deployuser/testapp
+        echo "🔧 Starting testapp deployment..."
+        docker compose down --remove-orphans || true
+        docker compose up -d
+        echo "✅ testapp deployment complete!"
+
+  - script: |
+      echo "🌐 Testing testapp:"
+      curl -I http://192.99.35.79:4030/wp-login.php
+    displayName: "🧪 Validate testapp deployment"

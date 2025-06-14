@@ -1,0 +1,63 @@
+# Generated on: Fri Jun 13 01:11:31 PM EDT 2025
+# App: c
+# Deploy User: deployuser
+# Azure Pipeline Template for c
+name: c-Deploy-SSH-ServiceConnection
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+  paths:
+    include:
+      - apps/c/*
+
+pr:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+
+variables:
+  - group: Secret-Variables-c
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "🐍 Use Python 3"
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y ansible
+    displayName: "📦 Install Ansible"
+
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: 'SSH-c'
+      sourceFolder: '$(Build.SourcesDirectory)/apps/c'
+      targetFolder: '/home/deployuser/c'
+    displayName: "🚚 Sync c Files to VM"
+
+  - task: SSH@0
+    displayName: "🔄 Deploy c"
+    inputs:
+      sshEndpoint: 'SSH-c'
+      runOptions: 'commands'
+      commands: |
+        cd /home/deployuser/c
+        echo "🔧 Starting c deployment..."
+        docker compose down --remove-orphans || true
+        docker compose up -d
+        echo "✅ c deployment complete!"
+
+  - script: |
+      echo "🌐 Testing c:"
+      curl -I http://192.99.35.79:4021/wp-login.php
+    displayName: "🧪 Validate c deployment"

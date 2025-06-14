@@ -1,0 +1,63 @@
+# Generated on: Fri Jun 13 01:12:02 PM EDT 2025
+# App: mystore
+# Deploy User: liadwordpress
+# Azure Pipeline Template for mystore
+name: mystore-Deploy-SSH-ServiceConnection
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+  paths:
+    include:
+      - apps/mystore/*
+
+pr:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+
+variables:
+  - group: Secret-Variables-mystore
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "🐍 Use Python 3"
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y ansible
+    displayName: "📦 Install Ansible"
+
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: 'SSH-mystore'
+      sourceFolder: '$(Build.SourcesDirectory)/apps/mystore'
+      targetFolder: '/home/liadwordpress/mystore'
+    displayName: "🚚 Sync mystore Files to VM"
+
+  - task: SSH@0
+    displayName: "🔄 Deploy mystore"
+    inputs:
+      sshEndpoint: 'SSH-mystore'
+      runOptions: 'commands'
+      commands: |
+        cd /home/liadwordpress/mystore
+        echo "🔧 Starting mystore deployment..."
+        docker compose down --remove-orphans || true
+        docker compose up -d
+        echo "✅ mystore deployment complete!"
+
+  - script: |
+      echo "🌐 Testing mystore:"
+      curl -I http://192.99.35.79:4000/wp-login.php
+    displayName: "🧪 Validate mystore deployment"

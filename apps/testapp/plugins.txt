@@ -1,0 +1,19 @@
+# Security & Performance
+wp-super-cache
+wordfence
+akismet
+
+# SEO
+wordpress-seo
+
+# Forms
+contact-form-7
+
+# Page Builder
+elementor
+
+# Backup
+updraftplus
+
+# Social
+jetpack

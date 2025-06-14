@@ -1,0 +1,69 @@
+# Generated on: Fri Jun 13 01:11:23 PM EDT 2025
+# App: a
+# Deploy User: deployuser
+# Azure Pipeline Template for a
+name: a-Deploy-SSH-ServiceConnection
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+  paths:
+    include:
+      - apps/a/*
+
+pr:
+  branches:
+    include:
+      - master
+      - development
+      - ysaber
+
+#fdsfsfsfsfsfsdfsfsf
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+    displayName: "🐍 Use Python 3"
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y ansible
+    displayName: "📦 Install Ansible"
+
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: 'SSH-wordpress'
+      # sourceFolder: '$(Build.SourcesDirectory)/apps/a'
+      # targetFolder: '/home/deployuser/a'
+  - script: |
+      echo "🔄 Syncing files to VM..."
+      sudo cp -r $(Build.SourcesDirectory)/apps/a/. /home/deployuser/a/
+      echo "change the permissions of the folder"
+      sudo chown -R deployuser:deployuser /home/deployuser/a
+      sudo chmod -R 755 /home/deployuser/a
+
+    displayName: "🚚 Sync a Files to VM"
+
+  - task: SSH@0
+    displayName: "🔄 Deploy a"
+    inputs:
+      sshEndpoint: 'SSH-wordpress'
+      runOptions: 'commands'
+      commands: |
+        cd /home/deployuser/a
+        echo "🔧 Starting a deployment..."
+        docker compose down --remove-orphans || true
+        docker compose up -d
+        echo "✅ a deployment complete!"
+
+  - script: |
+      echo "🌐 Testing a:"
+      curl -I http://192.99.35.79:4000/wp-login.php
+    displayName: "🧪 Validate a deployment"
